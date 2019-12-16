@@ -6,16 +6,25 @@ without changing its core. If OpenSSL is compiled with dynamic engine
 support, new algorithms can be added even without recompilation of
 OpenSSL and applications which use it.
 
+COMPILING AND INSTALLATION
+
+This engine is a drop-in replacement of the GOST engine included in openssl
+1.0.2. The original version does not support GOST2012 algorithms.  To compile
+it, you MUST apply the required patches (from the patches/ folder) to the
+openssl 1.0.2 source tree and copy all files from the current directory to the
+openssl/engines/ccgost folder.  After that you will be able to configure and
+build openssl using standard options.
+
 ALGORITHMS SUPPORTED
 
-GOST R 34.10-94 and GOST R 34.10-2001 - digital signature algorithms.
+GOST R 34.10-2001 and GOST R 34.10-2012 - digital signature algorithms.
    Also support key exchange based on public keys. See RFC 4357 for
    details of VKO key exchange algorithm. These algorithms use
    256 bit private keys. Public keys are 1024 bit for 94 and 512 bit for
    2001 (which is elliptic-curve based). Key exchange algorithms
    (VKO R 34.10) are supported on these keys too.
    
-GOST R 34.11-94  Message digest algorithm. 256-bit hash value
+GOST R 34.11-2012  Message digest algorithm. 256-bit hash value
 
 GOST 28147-89 - Symmetric cipher  with 256-bit key. Various modes are
    defined in the standard, but only CFB and CNT modes are implemented
@@ -27,6 +36,8 @@ GOST 28147-89 MAC mode. Message authentication code. While most MAC
 	algorithm, this algoritm is based on symmetric cipher. 
 	It has 256-bit symmetric key and only 32 bits of MAC value
 	(while HMAC has same key size and value size). 
+
+	Really, this algorithm supports from 8 to 64 bits of the MAC value
 
 	It is implemented as combination of EVP_PKEY type and EVP_MD type.
 
@@ -198,11 +209,30 @@ Russian clients and RSA/DSA ciphersuites for foreign clients.
  implementation of this mac) and OpenSSL is clever enough to find out
  this.
 
+ Following mac options are supported:
+
+ key:(32 bytes of key)
+
+ hexkey:(64 hexadecimal digits of key)
+
+ Engine support calculation of mac with size different from default 32
+ bits. You can set mac size to any value from 1 to 8 bytes using
+
+ -sigopt size:(number from 1 to 8 - mac size in bytes)
+
+ (dgst command uses different EVP_PKEY_CTX for initialization and for
+  finalization of MAC. Option of first are set via -macopt, and for
+  second via -sigopt. Key should be set during initialization and size
+  during finalization. If you use API functions
+  EVP_DigestSignInit/EVP_DigestSignFinal, you can set both options at
+  the same time).
+
  Encryption with GOST 28147 CFB mode
  openssl enc -gost89 -out encrypted-file -in plain-text-file -k <passphrase>  
  Encryption with GOST 28147 CNT mode
  openssl enc -gost89-cnt -out encrypted-file -in plain-text-file -k <passphrase>
-
+ Encryption with GOST 28147 CBC mode
+ openssl enc -gost89-cbc -out encrypted-file -in plain-text-file -k <passphrase>
 
 6. Encrypting private keys and PKCS12
 
@@ -216,16 +246,17 @@ openssl pksc12 -export -inkey gost.pem -in gost_cert.pem -keypbe gost89\
 7. Testing speed of symmetric ciphers.
    
 To test performance of GOST symmetric ciphers you should use -evp switch
-of the openssl speed command. Engine-provided ciphers can be accessed only via
-generic evp interface and not by cipher-specific functions.
+of the openssl speed command. Engine-provided ciphers couldn't be
+accessed by cipher-specific functions, only via generic evp interface
 
  openssl speed -evp gost89
  openssl speed -evp gost89-cnt
+ openssl speed -evp gost89-cbc
 
 
 PROGRAMMING INTERFACES DETAILS
 
-Applications should never access engine directly. They should only use provided
+Applications never should access engine directly. They only use provided
 EVP_PKEY API. But there are some details, which should be taken into
 account.
 
@@ -281,11 +312,12 @@ If UKM is not set by this control command, encrypt operation would
 generate random UKM.
 
 
-These sources include implementation of GOST 28147-89 and GOST R 34.11-94
-which are completely independent from OpenSSL and can be used separately
-(files gost89.c, gost89.h, gosthash.c, gosthash.h). Utility gostsum (file
-gostsum.c) is provided as an example of such separate usage. This program is
-similar to md5sum and sha1sum utilities, but calculates GOST R 34.11-94 hash.
+This sources include implementation of GOST 28147-89 and GOST R 34.11-94
+which are completely indepentent from OpenSSL and can be used separately
+(files gost89.c, gost89.h, gosthash.c, gosthash.h) Utility gostsum (file
+gostsum.c) is provided as example of such separate usage. This is
+program, simular to md5sum and sha1sum utilities, but calculates GOST R
+34.11-94 hash.
 
 Makefile doesn't include rule for compiling gostsum.
 Use command

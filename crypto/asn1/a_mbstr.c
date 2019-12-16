@@ -173,6 +173,8 @@ int ASN1_mbstring_ncopy(ASN1_STRING **out, const unsigned char *in, int len,
         str_type = V_ASN1_PRINTABLESTRING;
     else if (mask & B_ASN1_IA5STRING)
         str_type = V_ASN1_IA5STRING;
+    else if (mask & B_ASN1_NUMERICSTRING)
+        str_type = V_ASN1_NUMERICSTRING;
     else if (mask & B_ASN1_T61STRING)
         str_type = V_ASN1_T61STRING;
     else if (mask & B_ASN1_BMPSTRING) {

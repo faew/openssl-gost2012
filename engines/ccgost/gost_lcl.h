@@ -20,8 +20,23 @@
 # include "gosthash.h"
 /* Control commands */
 # define GOST_PARAM_CRYPT_PARAMS 0
-# define GOST_PARAM_MAX 0
+# define GOST_PARAM_PBE_PARAMS 1
+# define GOST_PARAM_MAX 1
 # define GOST_CTRL_CRYPT_PARAMS (ENGINE_CMD_BASE+GOST_PARAM_CRYPT_PARAMS)
+# define GOST_CTRL_PBE_PARAMS   (ENGINE_CMD_BASE+GOST_PARAM_PBE_PARAMS)
+
+typedef struct R3410_ec {
+    int nid;
+    char *a;
+    char *b;
+    char *p;
+    char *q;
+    char *x;
+    char *y;
+} R3410_ec_params;
+
+extern R3410_ec_params R3410_2001_paramset[],
+    *R3410_2012_256_paramset, R3410_2012_512_paramset[];
 
 extern const ENGINE_CMD_DEFN gost_cmds[];
 int gost_control_func(ENGINE *e, int cmd, long i, void *p, void (*f) (void));
@@ -42,7 +57,9 @@ int register_pmeth_gost(int id, EVP_PKEY_METHOD **pmeth, int flags);
 /* For GOST 28147 MAC */
 # define key_ctrl_string "key"
 # define hexkey_ctrl_string "hexkey"
+# define maclen_ctrl_string "size"
 # define EVP_PKEY_CTRL_GOST_MAC_HEXKEY (EVP_PKEY_ALG_CTRL+3)
+# define EVP_PKEY_CTRL_MAC_LEN (EVP_PKEY_ALG_CTRL+5)
 /* Pmeth internal representation */
 struct gost_pmeth_data {
     int sign_param_nid;         /* Should be set whenever parameters are
@@ -53,9 +70,17 @@ struct gost_pmeth_data {
 };
 
 struct gost_mac_pmeth_data {
-    int key_set;
+    short int key_set;
+    short int mac_size;
+    int mac_param_nid;
     EVP_MD *md;
     unsigned char key[32];
+};
+
+struct gost_mac_key {
+    int mac_param_nid;
+    unsigned char key[32];
+    short int mac_size;
 };
 /* GOST-specific ASN1 structures */
 
@@ -117,23 +142,35 @@ typedef struct {
 } GOST_CIPHER_PARAMS;
 
 DECLARE_ASN1_FUNCTIONS(GOST_CIPHER_PARAMS)
+
+typedef struct {
+    ASN1_OCTET_STRING *masked_priv_key;
+    ASN1_OCTET_STRING *public_key;
+} MASKED_GOST_KEY;
+
+DECLARE_ASN1_FUNCTIONS(MASKED_GOST_KEY)
+
 /*============== Message digest  and cipher related structures  ==========*/
-         /*
-          * Structure used as EVP_MD_CTX-md_data. It allows to avoid storing
-          * in the md-data pointers to dynamically allocated memory. I
-          * cannot invent better way to avoid memory leaks, because openssl
-          * insist on invoking Init on Final-ed digests, and there is no
-          * reliable way to find out whether pointer in the passed md_data is
-          * valid or not.
-          */
+    /*
+     * Structure used as EVP_MD_CTX-md_data. It allows to avoid storing
+     * in the md-data pointers to dynamically allocated memory. I
+     * cannot invent better way to avoid memory leaks, because openssl
+     * insist on invoking Init on Final-ed digests, and there is no
+     * reliable way to find out whether pointer in the passed md_data is
+     * valid or not.
+     */
 struct ossl_gost_digest_ctx {
     gost_hash_ctx dctx;
     gost_ctx cctx;
 };
 /* EVP_MD structure for GOST R 34.11 */
 extern EVP_MD digest_gost;
+/* EVP MD structure for GOST R 34.11-2012 algorithms */
+extern EVP_MD digest_gost2012_256;
+extern EVP_MD digest_gost2012_512;
 /* EVP_MD structure for GOST 28147 in MAC mode */
 extern EVP_MD imit_gost_cpa;
+extern EVP_MD imit_gost_cp_12;
 /* Cipher context used for EVP_CIPHER operation */
 struct ossl_gost_cipher_ctx {
     int paramNID;
@@ -156,6 +193,7 @@ struct ossl_gost_imit_ctx {
     int key_meshing;
     int bytes_left;
     int key_set;
+    int dgst_size;
 };
 /* Table which maps parameter NID to S-blocks */
 extern struct gost_cipher_info gost_cipher_list[];
@@ -163,51 +201,40 @@ extern struct gost_cipher_info gost_cipher_list[];
 const struct gost_cipher_info *get_encryption_params(ASN1_OBJECT *obj);
 /* Implementation of GOST 28147-89 cipher in CFB and CNT modes */
 extern EVP_CIPHER cipher_gost;
+extern EVP_CIPHER cipher_gost_cbc;
 extern EVP_CIPHER cipher_gost_cpacnt;
+extern EVP_CIPHER cipher_gost_cpcnt_12;
 # define EVP_MD_CTRL_KEY_LEN (EVP_MD_CTRL_ALG_CTRL+3)
 # define EVP_MD_CTRL_SET_KEY (EVP_MD_CTRL_ALG_CTRL+4)
+# define EVP_MD_CTRL_MAC_LEN (EVP_MD_CTRL_ALG_CTRL+5)
 /* EVP_PKEY_METHOD key encryption callbacks */
-/* From gost94_keyx.c */
-int pkey_GOST94cp_encrypt(EVP_PKEY_CTX *ctx, unsigned char *out,
-                          size_t *outlen, const unsigned char *key,
-                          size_t key_len);
+/* From gost_ec_keyx.c */
+int pkey_GOST_ECcp_encrypt(EVP_PKEY_CTX *ctx, unsigned char *out,
+                           size_t *outlen, const unsigned char *key,
+                           size_t key_len);
 
-int pkey_GOST94cp_decrypt(EVP_PKEY_CTX *ctx, unsigned char *out,
-                          size_t *outlen, const unsigned char *in,
-                          size_t in_len);
-/* From gost2001_keyx.c */
-int pkey_GOST01cp_encrypt(EVP_PKEY_CTX *ctx, unsigned char *out,
-                          size_t *outlen, const unsigned char *key,
-                          size_t key_len);
-
-int pkey_GOST01cp_decrypt(EVP_PKEY_CTX *ctx, unsigned char *out,
-                          size_t *outlen, const unsigned char *in,
-                          size_t in_len);
+int pkey_GOST_ECcp_decrypt(EVP_PKEY_CTX *ctx, unsigned char *out,
+                           size_t *outlen, const unsigned char *in,
+                           size_t in_len);
 /* derive functions */
-/* From gost2001_keyx.c */
-int pkey_gost2001_derive(EVP_PKEY_CTX *ctx, unsigned char *key,
-                         size_t *keylen);
-/* From gost94_keyx.c */
-int pkey_gost94_derive(EVP_PKEY_CTX *ctx, unsigned char *key, size_t *keylen);
-/* Internal functions for signature algorithms */
-int fill_GOST94_params(DSA *dsa, int nid);
-int fill_GOST2001_params(EC_KEY *eckey, int nid);
+/* From gost_ec_keyx.c */
+int pkey_gost_ec_derive(EVP_PKEY_CTX *ctx, unsigned char *key,
+                        size_t *keylen);
+int fill_GOST_EC_params(EC_KEY *eckey, int nid);
 int gost_sign_keygen(DSA *dsa);
-int gost2001_keygen(EC_KEY *ec);
+int gost_ec_keygen(EC_KEY *ec);
 
-DSA_SIG *gost_do_sign(const unsigned char *dgst, int dlen, DSA *dsa);
-DSA_SIG *gost2001_do_sign(const unsigned char *dgst, int dlen, EC_KEY *eckey);
+DSA_SIG *gost_ec_sign(const unsigned char *dgst, int dlen, EC_KEY *eckey);
 
 int gost_do_verify(const unsigned char *dgst, int dgst_len,
                    DSA_SIG *sig, DSA *dsa);
-int gost2001_do_verify(const unsigned char *dgst, int dgst_len,
-                       DSA_SIG *sig, EC_KEY *ec);
-int gost2001_compute_public(EC_KEY *ec);
-int gost94_compute_public(DSA *dsa);
+int gost_ec_verify(const unsigned char *dgst, int dgst_len,
+                   DSA_SIG *sig, EC_KEY *ec);
+int gost_ec_compute_public(EC_KEY *ec);
 /*============== miscellaneous functions============================= */
 /* from gost_sign.c */
 /* Convert GOST R 34.11 hash sum to bignum according to standard */
-BIGNUM *hashsum2bn(const unsigned char *dgst);
+BIGNUM *hashsum2bn(const unsigned char *dgst, int len);
 /*
  * Store bignum in byte array of given length, prepending by zeros if
  * nesseccary
@@ -217,13 +244,9 @@ int store_bignum(BIGNUM *bn, unsigned char *buf, int len);
 BIGNUM *getbnfrombuf(const unsigned char *buf, size_t len);
 /* Pack GOST R 34.10 signature according to CryptoPro rules */
 int pack_sign_cp(DSA_SIG *s, int order, unsigned char *sig, size_t *siglen);
-/* Unpack GOST R 34.10 signature according to CryptoPro rules */
-DSA_SIG *unpack_cp_signature(const unsigned char *sig, size_t siglen);
 /* from ameth.c */
-/* Get private key as BIGNUM from both R 34.10-94 and R 34.10-2001  keys*/
+/* Get private key as BIGNUM from both 34.10-2001 keys*/
 /* Returns pointer into EVP_PKEY structure */
 BIGNUM *gost_get0_priv_key(const EVP_PKEY *pkey);
-/* Find NID by GOST 94 parameters */
-int gost94_nid_by_params(DSA *p);
 
 #endif
