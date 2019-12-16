@@ -1,4 +1,24 @@
 
+ Merge https://github.com/openssl/openssl/tree/OpenSSL_1_0_2t and 
+ https://github.com/gost-engine/engine/tree/openssl_1_0_2 for add update
+ module gost.
+ 
+ Compile
+ 
+ # ./config shared --prefix=/usr/local/gost --openssldir=/usr/local/gost
+ # make all
+ # make install
+ 
+ Use
+ # echo "message" | /usr/local/gost/bin/openssl smime -sign -engine gost \
+   -signer certificate.cer -inkey private.key -nochain -nocerts -outform PEM -nodetach
+   
+   engine "gost" set.
+   -----BEGIN PKCS7-----
+   ...
+   -----END PKCS7-----
+ 
+ -------------------------------------------------------------
  OpenSSL 1.0.2t 10 Sep 2019
 
  Copyright (c) 1998-2019 The OpenSSL Project
