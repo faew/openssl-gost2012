@@ -17,6 +17,13 @@
    -----BEGIN PKCS7-----
    ...
    -----END PKCS7-----
+   
+ For Esia
+ # /usr/local/gost/bin/openssl smime -sign  -engine gost -binary -outform DER -noattr \
+-signer ./server.crt -inkey ./server.key -in ./message.txt -out ./sign.out
+
+ PHP
+ $sign = rtrim(strtr(trim(file_get_contents(base64_encode("./sign.out"))), '+/', '-_'), '=');
  
  -------------------------------------------------------------
  OpenSSL 1.0.2t 10 Sep 2019
