@@ -23,7 +23,7 @@
 -signer ./server.crt -inkey ./server.key -in ./message.txt -out ./sign.out
 
  PHP
- $sign = rtrim(strtr(trim(file_get_contents(base64_encode("./sign.out"))), '+/', '-_'), '=');
+ $sign = rtrim(strtr(trim(base64_encode(file_get_contents("./sign.out"))), '+/', '-_'), '=');
  
  -------------------------------------------------------------
  OpenSSL 1.0.2t 10 Sep 2019
