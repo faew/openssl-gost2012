@@ -10,6 +10,11 @@
  # make install
  
  Use
+ # generate crt & key
+ # /usr/local/gost/bin/openssl req -x509 -nodes -newkey gost2012_512 -days 365 -engine gost  -pkeyopt paramset:A \
+    -out domain.crt -keyout domain.key -subj /C=/ST=/L=/O=/CN=domain
+ 
+ # sign
  # echo "message" | /usr/local/gost/bin/openssl smime -sign -engine gost \
    -signer certificate.cer -inkey private.key -nochain -nocerts -outform PEM -nodetach
    
